@@ -13,13 +13,15 @@
 #   Ansible                                  uv tool                    uv tool upgrade --all
 #   hcloud CLI                               Hetzner's documented       re-run: bash setup-wsl-dev.sh hcloud
 #                                            tarball -> /usr/local/bin
+#   AWS CLI v2                               AWS's documented           re-run: bash setup-wsl-dev.sh aws
+#                                            installer -> /usr/local
 #   SDKMAN (you install Java yourself)       sdkman.io installer        sdk selfupdate
 #
 # Usage:
 #   bash setup-wsl-dev.sh                 # everything
 #   bash setup-wsl-dev.sh sdkman dotnet   # only selected steps
 #
-# Steps: base ripgrep just node pnpm typescript uv dotnet hcloud terraform ansible sdkman
+# Steps: base ripgrep just node pnpm typescript uv dotnet hcloud aws terraform ansible sdkman
 # (sdkman runs last: SDKMAN's docs say its .bashrc snippet must be at the end of the file)
 # Re-runnable: steps skip or update what is already installed.
 # =============================================================================
@@ -29,7 +31,7 @@ set -o pipefail   # deliberately no -e / -u: nvm and SDKMAN aren't safe under th
 DOTNET_SDK="${DOTNET_SDK:-dotnet-sdk-10.0}" # apt package; current .NET LTS
 ANSIBLE_PYTHON="${ANSIBLE_PYTHON:-3.14}"    # newest Python ansible-core supports (3.12-3.14)
 BIN_DIR="$HOME/.local/bin"
-ALL_STEPS=(base ripgrep just node pnpm typescript uv dotnet hcloud terraform ansible sdkman)
+ALL_STEPS=(base ripgrep just node pnpm typescript uv dotnet hcloud aws terraform ansible sdkman)
 FAILED=()
 
 log()  { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
@@ -187,6 +189,39 @@ step_hcloud() {
   hash -r
 }
 
+step_aws() {
+  # AWS's documented install for AWS CLI v2, commands run as-is inside a temp directory.
+  # Source: docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html (Linux)
+  local arch tmp rc
+  case "$(uname -m)" in
+    x86_64)  arch=x86_64 ;;
+    aarch64) arch=aarch64 ;;
+    *) warn "AWS ships the installer for x86_64 and aarch64 only (you have $(uname -m))"; return 1 ;;
+  esac
+  have unzip || { warn "unzip missing, run the base step first"; return 1; }
+  tmp="$(mktemp -d)"
+  (
+    cd "$tmp" || exit 1
+    curl -fsS "https://awscli.amazonaws.com/awscli-exe-linux-${arch}.zip" -o "awscliv2.zip" &&
+    unzip -q awscliv2.zip || exit 1
+    if [[ -d /usr/local/aws-cli ]]; then
+      # AWS's documented update command (same installer, default locations spelled out).
+      sudo ./aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
+    else
+      sudo ./aws/install
+    fi
+  )
+  rc=$?
+  rm -rf "$tmp"
+  [[ $rc -eq 0 ]] || return 1
+
+  # AWS's docs (Command completion, Bash): add this line to .bashrc.
+  add_rc aws-completion "complete -C '/usr/local/bin/aws_completer' aws"
+  hash -r
+  [[ "$(command -v aws)" == /usr/local/bin/aws ]] || warn "aws resolves to $(command -v aws), expected /usr/local/bin/aws"
+  have aws
+}
+
 step_terraform() {
   local keyring=/usr/share/keyrings/hashicorp-archive-keyring.gpg codename fallback
   # shellcheck disable=SC1091
@@ -279,6 +314,7 @@ check tsc       tsc -v
 check uv        uv -V
 check dotnet    dotnet --version
 check hcloud    hcloud version
+check aws       aws --version
 check terraform terraform -version
 check ansible   ansible --version
 sdk_ver() { sdk version 2>/dev/null | grep -m1 -E '[0-9]+\.[0-9]+'; }
