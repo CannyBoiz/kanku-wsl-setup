@@ -10,7 +10,7 @@ bash setup-wsl-dev.sh hcloud dotnet   # only selected steps
 exec bash                             # reload your shell afterwards
 ```
 
-Steps, in order: `base ripgrep just node pnpm typescript uv dotnet hcloud aws terraform ansible sdkman`
+Steps, in order: `base ripgrep node pnpm typescript uv just dotnet hcloud aws terraform ansible sdkman`
 
 Run it as your normal user from your Linux home directory (`~`), not from `/mnt/c`. It asks for your sudo password where needed. Every step can be rerun safely. If a step fails, the script continues and lists the failed steps at the end.
 
@@ -20,7 +20,6 @@ Run it as your normal user from your Linux home directory (`~`), not from `/mnt/
 |---|---|---|---|
 | Base tools (curl, git, zip, build-essential…) | `apt install` | Standard Ubuntu packages | `sudo apt upgrade` |
 | [ripgrep](https://github.com/BurntSushi/ripgrep#installation) | `apt install ripgrep` | Yes | `sudo apt upgrade` |
-| [just](https://github.com/casey/just#installation) | `apt install just` | Yes | `sudo apt upgrade` |
 | [.NET SDK 10](https://learn.microsoft.com/dotnet/core/install/linux-ubuntu-install) | `apt install dotnet-sdk-10.0` from Ubuntu's feed | Yes | `sudo apt upgrade` |
 | [Terraform](https://developer.hashicorp.com/terraform/install) | HashiCorp's apt repo | Yes, plus a fallback if the repo doesn't support your Ubuntu codename yet | `sudo apt upgrade` |
 | [hcloud](https://github.com/hetznercloud/cli/blob/main/docs/tutorials/setup-hcloud-cli.md) | Hetzner's documented commands, run as-is | Yes | Rerun `bash setup-wsl-dev.sh hcloud` |
@@ -30,6 +29,7 @@ Run it as your normal user from your Linux home directory (`~`), not from `/mnt/
 | [pnpm](https://pnpm.io/installation) | `get.pnpm.io` standalone script | Yes | `pnpm self-update` |
 | [TypeScript](https://www.typescriptlang.org/download) | `pnpm add -g typescript` | Documented, but TypeScript recommends per-project installs. Global is a deliberate choice for convenience | `pnpm update -g` |
 | [uv](https://docs.astral.sh/uv/getting-started/installation/) + Python | `astral.sh/uv` installer, then `uv python install` | Yes | `uv self update` |
+| [just](https://github.com/casey/just#installation) | `uv tool install rust-just` | Yes | `uv tool upgrade --all` |
 | [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/index.html) | `uv tool install`, including ansible-core's commands | No (Ansible documents pipx and its PPA). uv is a deliberate choice | `uv tool upgrade --all` |
 
 ## Installed by the script
@@ -54,7 +54,7 @@ Run it as your normal user from your Linux home directory (`~`), not from `/mnt/
 
 ## Good to know
 
-- **Ubuntu packages keep the same version.** ripgrep, just and .NET get security and bug fixes through `apt upgrade`, but stay on the same major/minor version for as long as you're on 26.04. Terraform is different: HashiCorp's repo ships every new release.
+- **Ubuntu packages keep the same version.** ripgrep and .NET get security and bug fixes through `apt upgrade`, but stay on the same major/minor version for as long as you're on 26.04. Terraform is different: HashiCorp's repo ships every new release.
 - **.NET 11.** Microsoft's support table for 26.04 lists only .NET 10 in Ubuntu's built-in feed. When .NET 11 comes out, check that page for how to get it on 26.04. Don't mix .NET packages from Ubuntu's and Microsoft's feeds.
 - **.NET global tools.** Ubuntu's .NET package adds `~/.dotnet/tools` to your PATH, so `dotnet tool install -g` works without extra setup.
 - **nvm globals.** Global npm packages are tied to each Node version, so switching versions with nvm hides them. pnpm and the global TypeScript aren't affected because pnpm is installed separately from Node.
@@ -75,4 +75,4 @@ These parts are the script's own and don't change how any tool is installed:
 - running Hetzner's and AWS's commands inside a temporary folder
 - choosing AWS's update command instead of the first-install command when `/usr/local/aws-cli` already exists
 
-The Terraform tab-completion line it adds to `.bashrc` is the same line `terraform -install-autocomplete` writes. The hcloud completion line is the one Hetzner's docs say to add, and the AWS completion line is the one from AWS's command-completion page.
+The Terraform tab-completion line it adds to `.bashrc` is the same line `terraform -install-autocomplete` writes. The hcloud completion line is the one Hetzner's docs say to add, and the AWS completion line is the one from AWS's command-completion page. just's completion isn't in `.bashrc`: the script writes it to `~/.local/share/bash-completion/completions/just`, the location just's README recommends.

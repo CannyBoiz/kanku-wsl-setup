@@ -3,14 +3,14 @@
 # WSL dev bootstrap (written for Ubuntu 26.04)
 #
 #   Tool                                     Installed via              Updated by
-#   ripgrep (rg), just                       Ubuntu apt                 sudo apt upgrade
+#   ripgrep (rg)                             Ubuntu apt                 sudo apt upgrade
 #   .NET SDK 10                              Ubuntu apt                 sudo apt upgrade
 #   Terraform                                HashiCorp apt repo         sudo apt upgrade
 #   Node LTS                                 nvm                        nvm install --lts
 #   pnpm                                     standalone installer       pnpm self-update
 #   TypeScript                               pnpm global                pnpm update -g
 #   Python tooling                           uv (no pip)                uv self update
-#   Ansible                                  uv tool                    uv tool upgrade --all
+#   Ansible, just                            uv tool                    uv tool upgrade --all
 #   hcloud CLI                               Hetzner's documented       re-run: bash setup-wsl-dev.sh hcloud
 #                                            tarball -> /usr/local/bin
 #   AWS CLI v2                               AWS's documented           re-run: bash setup-wsl-dev.sh aws
@@ -21,7 +21,7 @@
 #   bash setup-wsl-dev.sh                 # everything
 #   bash setup-wsl-dev.sh sdkman dotnet   # only selected steps
 #
-# Steps: base ripgrep just node pnpm typescript uv dotnet hcloud aws terraform ansible sdkman
+# Steps: base ripgrep node pnpm typescript uv just dotnet hcloud aws terraform ansible sdkman
 # (sdkman runs last: SDKMAN's docs say its .bashrc snippet must be at the end of the file)
 # Re-runnable: steps skip or update what is already installed.
 # =============================================================================
@@ -31,7 +31,7 @@ set -o pipefail   # deliberately no -e / -u: nvm and SDKMAN aren't safe under th
 DOTNET_SDK="${DOTNET_SDK:-dotnet-sdk-10.0}" # apt package; current .NET LTS
 ANSIBLE_PYTHON="${ANSIBLE_PYTHON:-3.14}"    # newest Python ansible-core supports (3.12-3.14)
 BIN_DIR="$HOME/.local/bin"
-ALL_STEPS=(base ripgrep just node pnpm typescript uv dotnet hcloud aws terraform ansible sdkman)
+ALL_STEPS=(base ripgrep node pnpm typescript uv just dotnet hcloud aws terraform ansible sdkman)
 FAILED=()
 
 log()  { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
@@ -92,17 +92,11 @@ step_base() {
   mkdir -p "$BIN_DIR"
 }
 
-# The apt packages ship their own bash completions, so no .bashrc lines needed.
+# The apt package ships its own bash completion, so no .bashrc lines needed.
 step_ripgrep() {
   sudo apt-get install -y ripgrep || return 1
   drop_local_bin rg /usr/bin/rg
   remove_rc ripgrep-completion
-}
-
-step_just() {
-  sudo apt-get install -y just || return 1
-  drop_local_bin just /usr/bin/just
-  remove_rc just-completion
 }
 
 step_node() {
@@ -141,6 +135,29 @@ step_uv() {
     uv self update || true
   fi
   uv python install   # uv-managed Python, separate from Ubuntu's /usr/bin/python3
+}
+
+step_just() {
+  have uv || { warn "uv missing, run the uv step first"; return 1; }
+  # A plain file here is a copy from the oldest versions of this script (uv's is a symlink);
+  # uv refuses to overwrite it.
+  [[ -L "$BIN_DIR/just" ]] || drop_local_bin just "uv's just"
+  # just's README documents this: the PyPI package 'rust-just' ships the just binary.
+  uv tool install --upgrade rust-just || return 1
+
+  # Migration from older versions of this script (apt package, /usr/bin/just).
+  if dpkg-query -W -f='${Status}' just 2>/dev/null | grep -q 'ok installed'; then
+    sudo apt-get remove -y just || return 1
+    warn "Removed the apt 'just' package so $BIN_DIR/just is used"
+  fi
+
+  # The apt package shipped bash completion; this one doesn't. just's README recommends
+  # this file, which the bash-completion package lazy-loads, so no .bashrc lines needed.
+  hash -r
+  local comp_dir="$HOME/.local/share/bash-completion/completions"
+  mkdir -p "$comp_dir" && just --completions bash > "$comp_dir/just"
+  [[ "$(command -v just)" == "$BIN_DIR/just" ]] || warn "just resolves to $(command -v just), expected $BIN_DIR/just"
+  have just
 }
 
 step_dotnet() {
@@ -280,7 +297,7 @@ if [[ "$ID" != "ubuntu" && "$ID" != "debian" && "$ID_LIKE" != *debian* ]]; then
   exit 1
 fi
 if [[ "$ID" == "ubuntu" && "$VERSION_ID" != "26.04" ]]; then
-  warn "Written for Ubuntu 26.04 (you have $VERSION_ID): apt may lack 'just' or '$DOTNET_SDK' here"
+  warn "Written for Ubuntu 26.04 (you have $VERSION_ID): apt may lack '$DOTNET_SDK' here"
 fi
 [[ "$PWD" == /mnt/* ]] && warn "You're under /mnt (Windows drive). Keep your projects in ~ for speed and sane permissions."
 
