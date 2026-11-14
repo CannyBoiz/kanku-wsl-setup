@@ -10,7 +10,7 @@ bash setup-wsl-dev.sh hcloud dotnet   # only selected steps
 exec bash                             # reload your shell afterwards
 ```
 
-Steps, in order: `base ripgrep node pnpm typescript uv just dotnet hcloud aws terraform ansible sdkman`
+Steps, in order: `base ripgrep node pnpm typescript uv just dotnet hcloud aws age sops terraform ansible sdkman`
 
 Run it as your normal user from your Linux home directory (`~`), not from `/mnt/c`. It asks for your sudo password where needed. Every step can be rerun safely. If a step fails, the script continues and lists the failed steps at the end.
 
@@ -24,6 +24,8 @@ Run it as your normal user from your Linux home directory (`~`), not from `/mnt/
 | [Terraform](https://developer.hashicorp.com/terraform/install) | HashiCorp's apt repo | Yes, plus a fallback if the repo doesn't support your Ubuntu codename yet | `sudo apt upgrade` |
 | [hcloud](https://github.com/hetznercloud/cli/blob/main/docs/tutorials/setup-hcloud-cli.md) | Hetzner's documented commands, run as-is | Yes | Rerun `bash setup-wsl-dev.sh hcloud` |
 | [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) | AWS's documented installer (`awscli-exe-linux-<arch>.zip`, then `sudo ./aws/install`) | Yes | Rerun `bash setup-wsl-dev.sh aws` |
+| [age](https://github.com/FiloSottile/age#installation) | `apt install age` | Yes | `sudo apt upgrade` |
+| [SOPS](https://github.com/getsops/sops/releases) | Release notes' `curl` download of `sops-<version>.linux.<arch>` into `/usr/local/bin/sops`, checked against the release's `checksums.txt` | Yes, except the script looks up the newest release and uses `sudo install` instead of `mv` + `chmod` | Rerun `bash setup-wsl-dev.sh sops` |
 | [SDKMAN](https://sdkman.io/install) | `curl -s "https://get.sdkman.io" \| bash` | Yes | Updates itself, or `sdk selfupdate` |
 | [nvm](https://github.com/nvm-sh/nvm#installing-and-updating) + Node LTS | nvm's `install.sh`, then `nvm install --lts` | Yes, except the script looks up the newest nvm version instead of using the README's fixed one | Node: `nvm install --lts`. nvm: rerun its install script |
 | [pnpm](https://pnpm.io/installation) | `get.pnpm.io` standalone script | Yes | `pnpm self-update` |
@@ -58,7 +60,8 @@ Run it as your normal user from your Linux home directory (`~`), not from `/mnt/
 - **.NET 11.** Microsoft's support table for 26.04 lists only .NET 10 in Ubuntu's built-in feed. When .NET 11 comes out, check that page for how to get it on 26.04. Don't mix .NET packages from Ubuntu's and Microsoft's feeds.
 - **.NET global tools.** Ubuntu's .NET package adds `~/.dotnet/tools` to your PATH, so `dotnet tool install -g` works without extra setup.
 - **nvm globals.** Global npm packages are tied to each Node version, so switching versions with nvm hides them. pnpm and the global TypeScript aren't affected because pnpm is installed separately from Node.
-- **hcloud and the AWS CLI** are the only tools that need the script to update. Neither has an apt repo or a self-update command, so rerunning the step downloads the latest release. Hetzner's documented command is for x86_64 only; the AWS step also works on aarch64.
+- **hcloud, the AWS CLI and SOPS** are the only tools that need the script to update. None has an apt repo or a self-update command, so rerunning the step downloads the latest release. Hetzner's documented command is for x86_64 only; the AWS and SOPS steps also work on aarch64.
+- **SOPS verification.** The script checks the binary's SHA-256 against the release's `checksums.txt`. It skips the release notes' optional cosign check of that file's signature, since cosign isn't installed.
 - **AWS CLI location.** It installs to `/usr/local/aws-cli`, with `aws` and `aws_completer` linked into `/usr/local/bin`. Each update keeps the previous version's folder under `/usr/local/aws-cli/v2`; old ones can be deleted.
 - **SDKMAN's lines in `.bashrc`** must stay at the end of the file. The script runs the SDKMAN step last for that reason. If other lines end up after them, move SDKMAN's three lines (the comment, `export SDKMAN_DIR`, and the `source` line) back to the bottom.
 - **Keep projects in `~`, not `/mnt/c`.** Builds are much slower across the Windows boundary, and Ansible ignores an `ansible.cfg` in a world-writable folder, which every `/mnt/c` folder is.
@@ -71,8 +74,8 @@ These parts are the script's own and don't change how any tool is installed:
 - the step runner, failure summary and end-of-run version check
 - cleanup of installs made by earlier versions of the script
 - the Terraform codename fallback
-- the nvm newest-version lookup
-- running Hetzner's and AWS's commands inside a temporary folder
+- the nvm and SOPS newest-version lookups
+- running Hetzner's, AWS's and SOPS's commands inside a temporary folder
 - choosing AWS's update command instead of the first-install command when `/usr/local/aws-cli` already exists
 
 The Terraform tab-completion line it adds to `.bashrc` is the same line `terraform -install-autocomplete` writes. The hcloud completion line is the one Hetzner's docs say to add, and the AWS completion line is the one from AWS's command-completion page. just's completion isn't in `.bashrc`: the script writes it to `~/.local/share/bash-completion/completions/just`, the location just's README recommends.

@@ -15,13 +15,16 @@
 #                                            tarball -> /usr/local/bin
 #   AWS CLI v2                               AWS's documented           re-run: bash setup-wsl-dev.sh aws
 #                                            installer -> /usr/local
+#   age                                      Ubuntu apt                 sudo apt upgrade
+#   SOPS                                     SOPS's documented          re-run: bash setup-wsl-dev.sh sops
+#                                            binary -> /usr/local/bin
 #   SDKMAN (you install Java yourself)       sdkman.io installer        sdk selfupdate
 #
 # Usage:
 #   bash setup-wsl-dev.sh                 # everything
 #   bash setup-wsl-dev.sh sdkman dotnet   # only selected steps
 #
-# Steps: base ripgrep node pnpm typescript uv just dotnet hcloud aws terraform ansible sdkman
+# Steps: base ripgrep node pnpm typescript uv just dotnet hcloud aws age sops terraform ansible sdkman
 # (sdkman runs last: SDKMAN's docs say its .bashrc snippet must be at the end of the file)
 # Re-runnable: steps skip or update what is already installed.
 # =============================================================================
@@ -31,7 +34,7 @@ set -o pipefail   # deliberately no -e / -u: nvm and SDKMAN aren't safe under th
 DOTNET_SDK="${DOTNET_SDK:-dotnet-sdk-10.0}" # apt package; current .NET LTS
 ANSIBLE_PYTHON="${ANSIBLE_PYTHON:-3.14}"    # newest Python ansible-core supports (3.12-3.14)
 BIN_DIR="$HOME/.local/bin"
-ALL_STEPS=(base ripgrep node pnpm typescript uv just dotnet hcloud aws terraform ansible sdkman)
+ALL_STEPS=(base ripgrep node pnpm typescript uv just dotnet hcloud aws age sops terraform ansible sdkman)
 FAILED=()
 
 log()  { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
@@ -239,6 +242,38 @@ step_aws() {
   have aws
 }
 
+step_age() {
+  sudo apt-get install -y age   # also provides age-keygen
+}
+
+step_sops() {
+  # SOPS's documented install (release notes: download the binary into your PATH),
+  # plus their sha256sum check, run inside a temp directory.
+  # Source: github.com/getsops/sops/releases (Installation, Verify binary integrity)
+  local arch ver tmp rc
+  case "$(uname -m)" in
+    x86_64)  arch=amd64 ;;
+    aarch64) arch=arm64 ;;
+    *) warn "SOPS ships Linux binaries for amd64 and arm64 only (you have $(uname -m))"; return 1 ;;
+  esac
+  ver="$(latest_tag getsops/sops)"
+  [[ "$ver" == v* ]] || { warn "Couldn't look up the latest SOPS release"; return 1; }
+  tmp="$(mktemp -d)"
+  (
+    cd "$tmp" || exit 1
+    curl -fsSLO "https://github.com/getsops/sops/releases/download/${ver}/sops-${ver}.linux.${arch}" &&
+    curl -fsSLO "https://github.com/getsops/sops/releases/download/${ver}/sops-${ver}.checksums.txt" &&
+    sha256sum -c --ignore-missing "sops-${ver}.checksums.txt" &&
+    sudo install -m 0755 "sops-${ver}.linux.${arch}" /usr/local/bin/sops
+  )
+  rc=$?
+  rm -rf "$tmp"
+  [[ $rc -eq 0 ]] || return 1
+  hash -r
+  [[ "$(command -v sops)" == /usr/local/bin/sops ]] || warn "sops resolves to $(command -v sops), expected /usr/local/bin/sops"
+  have sops
+}
+
 step_terraform() {
   local keyring=/usr/share/keyrings/hashicorp-archive-keyring.gpg codename fallback
   # shellcheck disable=SC1091
@@ -332,6 +367,8 @@ check uv        uv -V
 check dotnet    dotnet --version
 check hcloud    hcloud version
 check aws       aws --version
+check age       age --version
+check sops      sops --version
 check terraform terraform -version
 check ansible   ansible --version
 sdk_ver() { sdk version 2>/dev/null | grep -m1 -E '[0-9]+\.[0-9]+'; }
